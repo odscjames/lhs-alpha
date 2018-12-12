@@ -63,10 +63,11 @@ class Source:
     """
     argument_definitions = []
 
-    def __init__(self, base_dir, remove_dir=False, publisher_name=None, url=None, sample=False, data_version=None, new_version=False):
+    def __init__(self, base_dir, remove_dir=False, publisher_name=None, url=None, sample=False, data_version=None, new_version=False, config=None):
 
         self.base_dir = base_dir
         self.sample = sample
+        self.config = config
 
         self.publisher_name = publisher_name or self.publisher_name
         if not self.publisher_name:
@@ -208,7 +209,7 @@ class Source:
         self.metadata_db.update_session_fetch_end()
 
     def push_to_server(self, data):
-        print("PUSHING TO SERVER NOW " + data['filename'])
+        print("PUSHING TO SERVER NOW " + data['filename'] + " TO " + self.config.server_url + " KEY " + self.config.server_api_key)
 
     def is_fetch_finished(self):
         metadata = self.metadata_db.get_session()
