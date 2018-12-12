@@ -4,6 +4,7 @@ import json
 import datetime
 import traceback
 import logging
+import requests
 
 from ocdskingfisher.util import save_content
 from ocdskingfisher.metadata_db import MetadataDB
@@ -198,11 +199,12 @@ class Source:
                                                        " but it clashed with a file already in the list!")
                         else:
                             self.metadata_db.add_filestatus(info)
-                self.push_to_server(data)
                 self.metadata_db.update_filestatus_fetch_end(data['filename'], response.errors, response.warnings)
 
             except Exception as e:
                 self.metadata_db.update_filestatus_fetch_end(data['filename'], [repr(e)])
+
+            self.push_to_server(data)
 
             data = self.metadata_db.get_next_filestatus_to_fetch()
 
@@ -210,6 +212,14 @@ class Source:
 
     def push_to_server(self, data):
         print("PUSHING TO SERVER NOW " + data['filename'] + " TO " + self.config.server_url + " KEY " + self.config.server_api_key)
+
+        r = requests.post(
+            self.config.server_url + '/api/v1/submit/?API_KEY=' + self.config.server_api_key,
+            data={
+                'filename': data['filename'],
+            }
+        )
+        print(r.text)
 
     def is_fetch_finished(self):
         metadata = self.metadata_db.get_session()

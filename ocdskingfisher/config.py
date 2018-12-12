@@ -15,7 +15,7 @@ class Config:
         # https://github.com/open-contracting/kingfisher/issues/223
         self.data_dir = os.path.join(this_dir, "..", "data")
         # Some hard coded defaults that should default to blank and be loaded properly TODO
-        self.server_url = 'localhost:9090'
+        self.server_url = 'http://localhost:9090'
         self.server_api_key = 'cat'
 
     def load_user_config(self):
