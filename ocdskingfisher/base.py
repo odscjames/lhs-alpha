@@ -6,8 +6,6 @@ import traceback
 import logging
 
 from ocdskingfisher.util import save_content
-from ocdskingfisher.checks import check_file
-from ocdskingfisher import database
 from ocdskingfisher.metadata_db import MetadataDB
 
 """Base class for defining OCDS publisher sources.
@@ -199,6 +197,7 @@ class Source:
                                                        " but it clashed with a file already in the list!")
                         else:
                             self.metadata_db.add_filestatus(info)
+                self.push_to_server(data)
                 self.metadata_db.update_filestatus_fetch_end(data['filename'], response.errors, response.warnings)
 
             except Exception as e:
@@ -208,114 +207,12 @@ class Source:
 
         self.metadata_db.update_session_fetch_end()
 
+    def push_to_server(self, data):
+        print("PUSHING TO SERVER NOW " + data['filename'])
+
     def is_fetch_finished(self):
         metadata = self.metadata_db.get_session()
         return bool(metadata['fetch_finished_datetime'])
-
-    """Uploads the fetched data as record rows to the Database"""
-    def run_store(self):
-        self.logger.info("Starting run_store")
-        metadata = self.metadata_db.get_session()
-
-        if not metadata['fetch_success']:
-            raise Exception('Can not run store without a successful fetch')
-
-        if database.is_store_done(self.source_id, self.data_version, self.sample):
-            return
-
-        source_session_id = database.start_store(self.source_id, self.data_version, self.sample, self.metadata_db)
-
-        for data in self.metadata_db.list_filestatus():
-
-            if data['data_type'].startswith('meta'):
-                continue
-
-            if database.is_store_file_done(source_session_id, data):
-                continue
-
-            with database.add_file(source_session_id, data) as database_file:
-
-                self.logger.info("Starting run_store for file " + data['filename'])
-
-                try:
-                    with open(os.path.join(self.full_directory, data['filename']),
-                              encoding=data['encoding']) as f:
-                        if data['data_type'] == "record_package_json_lines" or data['data_type'] == "release_package_json_lines":
-                            raw_data = f.readline()
-                            while raw_data:
-                                self._run_store_json_blob(data, database_file, json.loads(raw_data))
-                                raw_data = f.readline()
-                        else:
-                            self._run_store_json_blob(data, database_file, json.load(f))
-                except Exception as e:
-                    # TODO better way of dealing with this?
-                    raise e
-                    return
-
-        database.end_store(source_session_id)
-
-    def _run_store_json_blob(self, data, database_file, file_json_data):
-
-        objects_list = []
-        if data['data_type'] == 'record_package_list_in_results':
-            objects_list.extend(file_json_data['results'])
-        elif data['data_type'] == 'release_package_list_in_results':
-            objects_list.extend(file_json_data['results'])
-        elif data['data_type'] == 'record_package_list' or data['data_type'] == 'release_package_list':
-            objects_list.extend(file_json_data)
-        else:
-            objects_list.append(file_json_data)
-
-        del file_json_data
-
-        for json_data in objects_list:
-            if not isinstance(json_data, dict):
-                raise Exception("Can not process data in file {} as JSON is not an object".format(data['filename']))
-
-            if data['data_type'] == 'release' or data['data_type'] == 'record':
-                data_list = [json_data]
-            elif data['data_type'] == 'release_package' or \
-                    data['data_type'] == 'release_package_json_lines' or \
-                    data['data_type'] == 'release_package_list_in_results' or \
-                    data['data_type'] == 'release_package_list':
-                if 'releases' not in json_data:
-                    if data['data_type'] == 'release_package_json_lines' and \
-                            self.ignore_release_package_json_lines_missing_releases_error:
-                        return
-                    raise Exception("Release list not found in file {}".format(data['filename']))
-                elif not isinstance(json_data['releases'], list):
-                    raise Exception("Release list which is not a list found in file {}".format(data['filename']))
-                data_list = json_data['releases']
-            elif data['data_type'] == 'record_package' or \
-                    data['data_type'] == 'record_package_json_lines' or \
-                    data['data_type'] == 'record_package_list_in_results' or \
-                    data['data_type'] == 'record_package_list':
-                if 'records' not in json_data:
-                    raise Exception("Record list not found in file {}".format(data['filename']))
-                elif not isinstance(json_data['records'], list):
-                    raise Exception("Record list which is not a list found in file {}".format(data['filename']))
-                data_list = json_data['records']
-            else:
-                raise Exception("data_type not a known type")
-
-            package_data = {}
-            if not data['data_type'] == 'release':
-                for key, value in json_data.items():
-                    if key not in ('releases', 'records'):
-                        package_data[key] = value
-
-            for row in data_list:
-                if not isinstance(row, dict):
-                    raise Exception("Row in data is not a object {}".format(data['filename']))
-
-                if data['data_type'] == 'record' or \
-                        data['data_type'] == 'record_package' or \
-                        data['data_type'] == 'record_package_json_lines' or \
-                        data['data_type'] == 'record_package_list_in_results' or \
-                        data['data_type'] == 'record_package_list':
-                    database_file.insert_record(row, package_data)
-                else:
-                    database_file.insert_release(row, package_data)
 
     def save_url(self, file_name, data, file_path):
         save_content_response = save_content(data['url'], file_path)
@@ -327,22 +224,6 @@ class Source:
             self.errors = errors
             self.warnings = warnings
 
-    def run_check(self, override_schema_version=None):
-        self.logger.info("Starting run_check")
-        if not database.is_store_done(self.source_id, self.data_version, self.sample):
-            raise Exception('Can not run check without a successful store')
-
-        source_session_id = database.get_id_of_store(self.source_id, self.data_version, self.sample)
-
-        for data in self.metadata_db.list_filestatus():
-
-            if data['data_type'].startswith('meta'):
-                continue
-
-            self.logger.info("Starting run_check for file " + data['filename'])
-
-            check_file(self, source_session_id, data, override_schema_version)
-
     """Called with data to check before checks are run, so any problems can be fixed (See Australia)"""
     def before_check_data(self, data, override_schema_version=None):
         return data
@@ -351,8 +232,6 @@ class Source:
     def run_all(self):
         self.run_gather()
         self.run_fetch()
-        self.run_store()
-        self.run_check()
 
     def force_fetch_to_gather(self):
         self.logger.info("Starting force_fetch_to_gather")

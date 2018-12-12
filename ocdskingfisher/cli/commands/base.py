@@ -1,5 +1,4 @@
 import ocdskingfisher.sources_util
-import ocdskingfisher.database
 
 
 class CLICommand:

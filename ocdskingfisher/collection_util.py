@@ -1,4 +1,3 @@
-import ocdskingfisher.database
 import ocdskingfisher.sources_util
 import os
 
@@ -15,15 +14,6 @@ class Collection:
 
 def get_all_collections(config):
     out = []
-
-    # Load from database
-    for result in ocdskingfisher.database.get_all_collections():
-        out.append(Collection(
-            database_id=result['id'],
-            source_id=result['source_id'],
-            data_version=result['data_version'],
-            sample=result['sample'],
-        ))
 
     # Load from disk
     for sample in [True, False]:

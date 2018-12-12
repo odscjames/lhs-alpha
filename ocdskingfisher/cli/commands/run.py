@@ -1,6 +1,5 @@
 import ocdskingfisher.cli.commands.base
 import ocdskingfisher.sources_util
-import ocdskingfisher.database
 
 
 class RunCLICommand(ocdskingfisher.cli.commands.base.CLICommand):
@@ -101,11 +100,6 @@ class RunCLICommand(ocdskingfisher.cli.commands.base.CLICommand):
                 run_store = False
             if args.ignorecheck:
                 run_check = False
-
-        if run_store or run_check:
-            # If we are doing an operation that requires the database, try and initialise it now
-            # so that errors are caught before we start
-            ocdskingfisher.database.init()
 
         for source_info in run:
 
