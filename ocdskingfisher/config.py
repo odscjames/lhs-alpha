@@ -16,10 +16,16 @@ class Config:
         self.data_dir = os.path.join(this_dir, "..", "data")
 
     def load_user_config(self):
+        # First, try and load any config in the ini files
+        self._load_user_config_ini()
+        # Second, try and load any config in the env (so env overwrites ini)
+        self._load_user_config_env()
 
+    def _load_user_config_env(self):
         if os.environ.get('KINGFISHER_DATA_DIR'):
             self.data_dir = os.environ.get('KINGFISHER_DATA_DIR')
-            return
+
+    def _load_user_config_ini(self):
 
         config = configparser.ConfigParser()
 
