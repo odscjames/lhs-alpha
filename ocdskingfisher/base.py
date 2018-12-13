@@ -211,13 +211,24 @@ class Source:
         self.metadata_db.update_session_fetch_end()
 
     def push_to_server(self, data):
+
+        if data['data_type'].startswith('meta'):
+            return
+
         print("PUSHING TO SERVER NOW " + data['filename'] + " TO " + self.config.server_url + " KEY " + self.config.server_api_key)
 
         r = requests.post(
             self.config.server_url + '/api/v1/submit/?API_KEY=' + self.config.server_api_key,
             data={
-                'filename': data['filename'],
-            }
+                'collection_source': self.source_id,
+                'collection_data_version': self.data_version,
+                'collection_sample': 1 if self.sample else 0,
+                'file_name': data['filename'],
+                'file_url': data['url'],
+                'file_data_type': data['data_type'],
+                'file_encoding': data['encoding'],
+            },
+            files={'file': open(os.path.join(self.full_directory, data['filename']), 'rb')}
         )
         print(r.text)
 
