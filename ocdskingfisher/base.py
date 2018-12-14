@@ -5,6 +5,7 @@ import datetime
 import traceback
 import logging
 import requests
+import tempfile
 
 from ocdskingfisher.util import save_content
 from ocdskingfisher.metadata_db import MetadataDB
@@ -215,22 +216,68 @@ class Source:
         if data['data_type'].startswith('meta'):
             return
 
-        print("PUSHING TO SERVER NOW " + data['filename'] + " TO " + self.config.server_url + " KEY " + self.config.server_api_key)
+        if data['data_type'] == 'release_package_json_lines' or data['data_type'] == 'record_package_json_lines':
 
-        r = requests.post(
-            self.config.server_url + '/api/v1/submit/?API_KEY=' + self.config.server_api_key,
-            data={
-                'collection_source': self.source_id,
-                'collection_data_version': self.data_version,
-                'collection_sample': 1 if self.sample else 0,
-                'file_name': data['filename'],
-                'file_url': data['url'],
-                'file_data_type': data['data_type'],
-                'file_encoding': data['encoding'],
-            },
-            files={'file': open(os.path.join(self.full_directory, data['filename']), 'rb')}
-        )
-        print(r.text)
+
+            # BREAK FILE INTO INDIVIDUAL LINES AND SEND ONLY ONE AT A TIME TO THE SERVER!
+
+            try:
+                with open(os.path.join(self.full_directory, data['filename']), encoding=data['encoding']) as f:
+                    number = 0
+                    raw_data = f.readline()
+                    while raw_data:
+
+                        print("PUSHING TO SERVER NOW NUMBER " + str(number) + " FILE  " + data['filename'] + " TO " + self.config.server_url + " KEY " + self.config.server_api_key)
+
+                        (tmp_file, tmp_filename) = tempfile.mkstemp(prefix="ocdskf-")
+                        os.close(tmp_file)
+
+                        f_write = open(tmp_filename, "w")
+                        f_write.write(raw_data)
+                        f_write.close()
+
+                        r = requests.post(
+                            self.config.server_url + '/api/v1/submit/item/?API_KEY=' + self.config.server_api_key,
+                            data={
+                                'collection_source': self.source_id,
+                                'collection_data_version': self.data_version,
+                                'collection_sample': 1 if self.sample else 0,
+                                'file_name': data['filename'],
+                                'file_url': data['url'],
+                                'file_data_type': data['data_type'],
+                                'file_encoding': data['encoding'],
+                                'number': number,
+                            },
+                            files={'file': open(tmp_filename, 'rb')}
+                        )
+                        print(r.text)
+
+                        raw_data = f.readline()
+                        number += 1
+            except Exception as e:
+                raise e
+                # TODO Store error in database and make nice HTTP response!
+
+        else:
+
+            # SEND WHOLE FILE IN ONE GO TO THE SERVER!
+
+            print("PUSHING TO SERVER NOW " + data['filename'] + " TO " + self.config.server_url + " KEY " + self.config.server_api_key)
+
+            r = requests.post(
+                self.config.server_url + '/api/v1/submit/?API_KEY=' + self.config.server_api_key,
+                data={
+                    'collection_source': self.source_id,
+                    'collection_data_version': self.data_version,
+                    'collection_sample': 1 if self.sample else 0,
+                    'file_name': data['filename'],
+                    'file_url': data['url'],
+                    'file_data_type': data['data_type'],
+                    'file_encoding': data['encoding'],
+                },
+                files={'file': open(os.path.join(self.full_directory, data['filename']), 'rb')}
+            )
+            print(r.text)
 
     def is_fetch_finished(self):
         metadata = self.metadata_db.get_session()
